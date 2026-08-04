@@ -26,9 +26,6 @@ nodes:
       button_b:
         source: udp-receiver/button_b
         queue_size: 100
-      vr_receive_times:
-        source: udp-receiver/vr_receive_times
-        queue_size: 100
     outputs:
       - command
 
@@ -52,12 +49,11 @@ nodes:
       - trigger_right
       - pose_left
       - trigger_left
-      - joystick_y_left
+      - joystick_y
       - button_a
       - button_b
       - button_x
       - status
-      - vr_receive_times
 
   - id: ik
     build: pip install -e nodes/dora-openarm-kinematics
@@ -80,13 +76,13 @@ nodes:
     path: dora-openarm-mujoco
     args: "--scene demo --keyframe home --enable-collision --ctrl --viewer --render"
     env:
-      DISPLAY: ":1" # needed when running headless with Xvfb
+      DISPLAY: ":0" # needed when running headless with Xvfb
     inputs:
       position_left: ik/position_left
       position_right: ik/position_right
       pose_right: udp-receiver/pose_right
       pose_left: udp-receiver/pose_left
-      joystick_y: udp-receiver/joystick_y_left
+      joystick_y: udp-receiver/joystick_y
       button_x: udp-receiver/button_x
     outputs:
       - status

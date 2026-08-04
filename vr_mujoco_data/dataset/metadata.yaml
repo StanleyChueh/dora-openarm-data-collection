@@ -1,0 +1,33 @@
+episodes:
+- id: '0'
+  success: true
+  task_index: 0
+equipment:
+  embodiments:
+    arms:
+      id: OpenArm
+      version: '2.0'
+  id: Test
+  perceptions:
+    cameras:
+      ceiling: {}
+      head_left: {}
+      head_right: {}
+      wrist_left: {}
+      wrist_right: {}
+  version: '1.0'
+frequencies:
+  action:
+    arms:
+      left: 500.0
+      right: 500.0
+  cameras: {}
+  obs:
+    arms: {}
+location: Lab
+operation_type: teleop
+operator: Tester
+tasks:
+- description: Pick a spoon on a table.
+  prompt: Pick a spoon.
+version: 0.3.0
