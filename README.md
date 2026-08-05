@@ -1,25 +1,29 @@
-# Data collection configurations for OpenArm with dora-rs
+# Usage
 
-This repository provides data collection configurations for [OpenArm](https://openarm.dev/) with [dora-rs](https://dora-rs.ai/).
+Launch OpenARM VR 
 
-## Configurations
+```
+cd dora-openarm-data-collection
+uv venv .venv
+source .venv/bin/activate
+uv pip install dora-rs-cli
+```
 
-[`metadata.yaml`](metadata.yaml) is metadata used by all configurations.
+```
+dora run dataflow-vr-mujoco-ros2.yaml  --uv
+```
 
-### Real configuration
+Launch Isaac Sim
 
-TODO
+```
+cd ~/isaacsim
+./isaac-sim.selector.sh
+```
 
-### Dummy configuration
+Drag USD into Isaac Sim
 
-[`dataflow_dummy.yaml`](dataflow_dummy.yaml) is a configuration that doesn't use real OpenArm. We can use this for testing a dataflow without real OpenArm.
+```
+openarm_ros_joint_control.usd
+```
 
-## License
-
-Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
-
-Copyright 2026 Enactic, Inc.
-
-## Code of Conduct
-
-All participation in the OpenArm project is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
+<img width="1241" height="563" alt="image" src="https://github.com/user-attachments/assets/cf1876c1-2814-47e6-b5a6-0d06d8f36857" />
