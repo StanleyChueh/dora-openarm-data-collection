@@ -47,6 +47,9 @@ skips the extra transform.
 from __future__ import annotations
 
 import argparse
+import os
+import sys
+from pathlib import Path
 
 from isaaclab.app import AppLauncher
 
@@ -72,6 +75,25 @@ parser.add_argument(
 )
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+
+# Resolve and validate the USD BEFORE launching the app.  Isaac takes ~6 s to
+# start, and a relative --usd resolves against the current working directory --
+# which is usually the IsaacLab checkout, not this repo -- so the naive failure
+# is a six-second wait followed by a FileNotFoundError from deep inside the
+# spawner.  Fail here instead, with the absolute path that was actually tried.
+args_cli.usd = str(Path(args_cli.usd).expanduser().resolve())
+if not os.path.isfile(args_cli.usd):
+    sys.exit(
+        f"USD not found: {args_cli.usd}\n"
+        f"  (cwd is {Path.cwd()}; --usd is resolved against it)\n\n"
+        "If you have not converted the URDF yet, from your IsaacLab checkout:\n"
+        "  ./isaaclab.sh -p scripts/tools/convert_urdf.py \\\n"
+        "      <abs>/openarm_description-main/v1_camera_isaac.urdf \\\n"
+        "      <abs>/openarm_description-main/v1_camera_isaac.usd \\\n"
+        "      --fix-base --joint-target-type position\n\n"
+        "Do NOT pass --merge-joints: it is store_true/default-False, and merging\n"
+        "would swallow the hand_tcp / grasp / camera frames."
+    )
 
 # The simulation app must exist before any isaaclab.* / omni.* import.
 app_launcher = AppLauncher(args_cli)

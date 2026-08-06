@@ -1,11 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
 <robot name="openarm">
-  <link name="world" />
-  <joint name="openarm_body_world_joint" type="fixed">
-    <parent link="world" />
-    <child link="openarm_body_link0" />
-    <origin rpy="0 0 0" xyz="0 0 0" />
-  </joint>
   <link name="openarm_body_link0">
     <visual name="openarm_body_link0_visual">
       <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0" />

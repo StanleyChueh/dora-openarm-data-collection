@@ -74,6 +74,53 @@ DEFAULT_GRASP_Z = 0.165
 OFF_DIAGONAL = ("ixy", "ixz", "iyz")
 
 
+def strip_world_link(root: ET.Element) -> str | None:
+    """Drop a massless, geometry-less root `world` link and its fixed joint.
+
+    v1_camera.urdf starts with
+
+        <link name="world"/>
+        <joint name="openarm_body_world_joint" type="fixed">
+          <parent link="world"/><child link="openarm_body_link0"/>
+
+    which is the usual ROS convention for anchoring a robot.  Isaac's URDF
+    converter does not need it -- --fix-base anchors the base -- and a root link
+    with no inertia, no collision and no visual gives it nothing to attach the
+    articulation to at the top level, so ArticulationRootAPI can end up on a
+    child prim.  Isaac Lab then fails with
+
+        Failed to find an articulation when resolving '.../Robot'
+
+    even though the robot itself is fine.  Removing the link makes
+    openarm_body_link0 the real root.
+
+    Returns the name of the new root, or None if there was no world link.
+    """
+    links = {link.get("name"): link for link in root.iter("link")}
+    children = {j.find("child").get("link") for j in root.iter("joint")}
+    roots = [name for name in links if name not in children]
+    if len(roots) != 1:
+        raise SystemExit(f"expected exactly one root link, found {roots}")
+    root_name = roots[0]
+
+    world = links[root_name]
+    # Only strip a genuinely empty anchor; a root that carries real geometry is
+    # the robot itself and must stay.
+    if any(world.find(tag) is not None for tag in ("inertial", "visual", "collision")):
+        return None
+
+    anchor_joints = [
+        j for j in root.iter("joint") if j.find("parent").get("link") == root_name
+    ]
+    if len(anchor_joints) != 1 or anchor_joints[0].get("type") != "fixed":
+        return None
+
+    new_root = anchor_joints[0].find("child").get("link")
+    root.remove(world)
+    root.remove(anchor_joints[0])
+    return new_root
+
+
 def strip_package_uris(root: ET.Element, prefix: str) -> int:
     n = 0
     for mesh in root.iter("mesh"):
@@ -158,11 +205,18 @@ def main() -> None:
         action="store_true",
         help="keep the source inertia tensors even if they are unrealisable",
     )
+    p.add_argument(
+        "--keep-world-link",
+        action="store_true",
+        help="keep the empty root `world` link (it usually breaks "
+        "ArticulationRootAPI placement on USD import)",
+    )
     args = p.parse_args()
 
     tree = ET.parse(args.source)
     root = tree.getroot()
 
+    new_root = None if args.keep_world_link else strip_world_link(root)
     n_meshes = strip_package_uris(root, args.package_prefix)
     fixed = [] if args.no_fix_inertia else fix_inertias(root)
     append_grasp_frames(root, args.grasp_z)
@@ -171,6 +225,12 @@ def main() -> None:
     tree.write(args.output, encoding="utf-8", xml_declaration=True)
 
     print(f"wrote {args.output}")
+    if new_root:
+        print(f"  root `world` link removed : new root is {new_root}")
+    elif args.keep_world_link:
+        print("  root `world` link         : kept (--keep-world-link)")
+    else:
+        print("  root `world` link         : none to remove")
     print(f"  package:// URIs rewritten : {n_meshes}")
     print(
         f"  grasp frames appended     : "

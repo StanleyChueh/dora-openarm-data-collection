@@ -24,6 +24,7 @@ payload 只有 16 個 float、100 Hz，stdlib UDP socket 沒有任何依賴問�
 | | |
 |---|---|
 | `make_isaac_urdf.py` | v1_camera.urdf → Isaac 可匯入的 URDF（產生器，不要手改輸出） |
+| `inspect_usd.py` | 轉檔後檢查 ArticulationRootAPI 落在哪個 prim |
 | `isaaclab_teleop.py` | Isaac Lab 主程式：UDP → 2× DiffIK → articulation |
 | `check_frames.py` | V1：量 `arm_origin`；V2：檢查 Isaac URDF 的 grasp frame |
 | `test_bridge_helpers.py` | V3：bridge.py 純函式測試（不需 dora/ROS） |
@@ -36,14 +37,30 @@ python3 isaac/make_isaac_urdf.py \
     openarm_description-main/assets/robot/openarm_v1.0/urdf/example/v1_camera.urdf \
     openarm_description-main/v1_camera_isaac.urdf
 
-# 2. URDF → USD
-${ISAACLAB}/isaaclab.sh -p scripts/tools/convert_urdf.py \
-    openarm_description-main/v1_camera_isaac.urdf \
-    openarm_description-main/v1_camera_isaac.usd \
-    --merge-joints=false --fix-base
+# 2. URDF → USD（在 IsaacLab checkout 底下跑，路徑用絕對路徑）
+cd ${ISAACLAB}
+./isaaclab.sh -p scripts/tools/convert_urdf.py \
+    ~/Ivan_ws/dora-openarm-data-collection/openarm_description-main/v1_camera_isaac.urdf \
+    ~/Ivan_ws/dora-openarm-data-collection/openarm_description-main/v1_camera_isaac.usd \
+    --fix-base --joint-target-type position
 ```
 
-⚠️ `--merge-joints=false`：合併會把 `openarm_{side}_grasp` / `hand_tcp` / camera frame 都吃掉，debug 時對不上名字。
+⚠️ **不要傳 `--merge-joints`**。它是 `store_true`、預設就是 False，所以「不傳 = 不合併」——這正是我們要的。合併會把 `openarm_{side}_grasp` / `hand_tcp` / camera frame 都吃掉。
+
+⚠️ **路徑用絕對路徑**。`isaaclab.sh` 的 CWD 是 IsaacLab checkout，相對路徑會相對那裡解析而不是這個 repo。
+
+```bash
+# 3. 確認 ArticulationRootAPI 落在 default prim 上
+${ISAACLAB}/isaaclab.sh -p isaac/inspect_usd.py <絕對路徑>/v1_camera_isaac.usd
+```
+
+沒過的話會直接告訴你 API 在哪個 prim、以及要怎麼修。
+
+> 產生器預設會**移除 URDF 根部的空 `world` link**。`v1_camera.urdf` 用 ROS 慣例把
+> `world --fixed--> openarm_body_link0` 當作錨點，但 `--fix-base` 已經在做這件事，
+> 而一個沒有慣量、沒有幾何的根 link 會讓轉檔器把 `ArticulationRootAPI` 貼到子 prim 上，
+> Isaac Lab 就會報 `Failed to find an articulation when resolving '.../Robot'`。
+> 移掉之後 `openarm_body_link0` 才是真正的 root。要保留就加 `--keep-world-link`。
 
 ## Bring-up 順序
 
