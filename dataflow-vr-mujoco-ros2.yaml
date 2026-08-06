@@ -48,6 +48,7 @@ nodes:
       - pose_right
       - trigger_right
       - pose_left
+      - pose_reference
       - trigger_left
       - joystick_y
       - button_a
@@ -72,9 +73,36 @@ nodes:
 
   - id: ros2-bridge
     path: ./nodes/dora-openarm-ros2-bridge/run_bridge.sh
+    env:
+      ROS_DOMAIN_ID: "1"
+      EEF_FRAME_ID: "base_link"
+      EEF_RATE_HZ: "100"
+      GRIPPER_MODE: "v1_prismatic"
+      # Measure with `python3 isaac/check_frames.py --scene demo` and set the
+      # printed z here; 0.698 is an inference, not a measurement.
+      ARM_ORIGIN_TO_BASE_Z: "0.698"
+      # Isaac Lab reads this UDP socket; set the port to 0 to disable.
+      ISAAC_UDP_HOST: "127.0.0.1"
+      ISAAC_UDP_PORT: "5007"
+    # queue_size: 1 -- udp-receiver ticks at 500 Hz and repeats the last UDP
+    # packet, so without this the bridge builds a backlog and the rate limiter
+    # ends up throttling stale data.
     inputs:
-      position_left: ik/position_left
-      position_right: ik/position_right
+      position_left:
+        source: ik/position_left
+        queue_size: 1
+      position_right:
+        source: ik/position_right
+        queue_size: 1
+      pose_right:
+        source: udp-receiver/pose_right
+        queue_size: 1
+      pose_left:
+        source: udp-receiver/pose_left
+        queue_size: 1
+      pose_reference:
+        source: udp-receiver/pose_reference
+        queue_size: 1
 
   # ── MuJoCo viewer (replaces follower-right, follower-left, and all cameras) ──
   - id: mujoco-collect
