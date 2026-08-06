@@ -88,6 +88,7 @@ nodes:
 
   - id: ros2-bridge
     path: ./nodes/dora-openarm-ros2-bridge/run_bridge.sh
+    args: "--vr-udp-host 127.0.0.1 --vr-udp-port 5800"
     env:
       ROS_DOMAIN_ID: "1"
     inputs:

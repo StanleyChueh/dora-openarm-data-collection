@@ -135,3 +135,51 @@ timestep: parent has 0.002 (default), child has 0.001, keeping parent value
 WARNING Wed Aug  5 18:12:57 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
 timestep: parent has 0.002 (default), child has 0.001, keeping parent value
 
+WARNING Thu Aug  6 11:11:10 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 11:49:23 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 13:33:31 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 13:34:57 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 13:47:41 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:02:11 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:08:56 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:13:49 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:14:32 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:17:43 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:17:57 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:22:35 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:36:56 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:45:56 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:50:02 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+
+WARNING Thu Aug  6 14:55:17 2026: Attach conflict when attaching 'cell' to 'openarm_bimanual cell demo', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.001, keeping parent value
+

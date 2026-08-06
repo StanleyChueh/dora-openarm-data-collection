@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
 
+import argparse
+import json
+import socket
+import time
 from typing import Optional
 
 import rclpy
@@ -49,7 +53,66 @@ def pose_values_to_msg(values: list[float]) -> Pose:
 IDENTITY_POSE = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Dora → ROS 2 OpenArm bridge.")
+    parser.add_argument(
+        "--vr-udp-host",
+        type=str,
+        default="127.0.0.1",
+        help="Destination host for the optional VR teleop UDP JSON side-channel.",
+    )
+    parser.add_argument(
+        "--vr-udp-port",
+        type=int,
+        default=0,
+        help=(
+            "If nonzero, best-effort UDP-broadcast the same eef_pose/gripper data as JSON"
+            " to <vr-udp-host>:<vr-udp-port> on every update. Off by default. Intended to"
+            " feed an external consumer (e.g. an Isaac Lab teleop device) that cannot import"
+            " rclpy directly (Python ABI mismatch) -- this process never talks to that"
+            " consumer except through this fire-and-forget socket."
+        ),
+    )
+    return parser.parse_args()
+
+
+class VrUdpBroadcaster:
+    """Best-effort UDP JSON broadcaster of the latest eef_pose + gripper state.
+
+    Fire-and-forget: never blocks and never raises into the dora event loop. Fields
+    that haven't been received yet are sent as `null` (not a placeholder pose/value)
+    so a consumer can distinguish "no VR data yet" from a real zero pose.
+    """
+
+    def __init__(self, host: str, port: int):
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._addr = (host, port)
+
+    def broadcast(
+        self,
+        pose_right: Optional[list[float]],
+        pose_left: Optional[list[float]],
+        pose_reference: Optional[list[float]],
+        gripper_right: Optional[float],
+        gripper_left: Optional[float],
+    ) -> None:
+        packet = {
+            "t": time.time(),
+            "pose_right": pose_right,
+            "pose_left": pose_left,
+            "pose_reference": pose_reference,
+            "gripper_right": gripper_right,
+            "gripper_left": gripper_left,
+        }
+        try:
+            self._sock.sendto(json.dumps(packet).encode("utf-8"), self._addr)
+        except OSError:
+            pass  # best-effort only -- never let a networking hiccup break the bridge
+
+
 def main() -> None:
+    args = parse_args()
+
     rclpy.init()
 
     ros_node = rclpy.create_node("dora_openarm_ros2_bridge")
@@ -69,6 +132,8 @@ def main() -> None:
         1,
     )
 
+    vr_udp = VrUdpBroadcaster(args.vr_udp_host, args.vr_udp_port) if args.vr_udp_port else None
+
     dora_node = DoraNode()
 
     latest_left: Optional[list[float]] = None
@@ -86,6 +151,11 @@ def main() -> None:
         "Dora → ROS 2 bridge started: /openarm/vr_joint_command, "
         "/openarm/eef_pose (order: right, left, reference), "
         "/openarm/gripper_cmd"
+        + (
+            f", VR UDP JSON → {args.vr_udp_host}:{args.vr_udp_port}"
+            if vr_udp is not None
+            else ""
+        )
     )
 
     try:
@@ -144,6 +214,15 @@ def main() -> None:
 
                 eef_pose_publisher.publish(pose_array_msg)
                 rclpy.spin_once(ros_node, timeout_sec=0.0)
+
+                if vr_udp is not None:
+                    vr_udp.broadcast(
+                        pose_right=latest_pose_right,
+                        pose_left=latest_pose_left,
+                        pose_reference=latest_pose_reference,
+                        gripper_right=latest_right[7] if latest_right else None,
+                        gripper_left=latest_left[7] if latest_left else None,
+                    )
                 continue
 
             else:
@@ -176,6 +255,15 @@ def main() -> None:
 
             gripper_publisher.publish(gripper_msg)
             rclpy.spin_once(ros_node, timeout_sec=0.0)
+
+            if vr_udp is not None:
+                vr_udp.broadcast(
+                    pose_right=latest_pose_right,
+                    pose_left=latest_pose_left,
+                    pose_reference=latest_pose_reference,
+                    gripper_right=latest_right[7],
+                    gripper_left=latest_left[7],
+                )
 
             left_updated = False
             right_updated = False
