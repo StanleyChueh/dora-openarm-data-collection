@@ -8,9 +8,13 @@
 #
 # Paths are derived from this file's own location, so the repo can live anywhere
 # and be checked out under any workspace name.
+<<<<<<< Updated upstream
 # NOT `set -u`: /opt/ros/humble/setup.bash reads unset variables
 # (AMENT_TRACE_SETUP_FILES and friends), so nounset makes sourcing it fatal.
 set -eo pipefail
+=======
+set -euo pipefail
+>>>>>>> Stashed changes
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
