@@ -5,6 +5,7 @@ from typing import Optional
 
 import rclpy
 from dora import Node as DoraNode
+from geometry_msgs.msg import Pose, PoseArray
 from sensor_msgs.msg import JointState
 
 
@@ -34,6 +35,20 @@ def arrow_to_float_list(value) -> list[float]:
     return [float(item) for item in value.to_pylist()]
 
 
+def pose_values_to_msg(values: list[float]) -> Pose:
+    """將 [x, y, z, qw, qx, qy, qz] 轉成 geometry_msgs/Pose。"""
+    msg = Pose()
+    msg.position.x, msg.position.y, msg.position.z = values[0], values[1], values[2]
+    msg.orientation.w = values[3]
+    msg.orientation.x = values[4]
+    msg.orientation.y = values[5]
+    msg.orientation.z = values[6]
+    return msg
+
+
+IDENTITY_POSE = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+
+
 def main() -> None:
     rclpy.init()
 
@@ -43,18 +58,34 @@ def main() -> None:
         "/openarm/vr_joint_command",
         1,
     )
+    eef_pose_publisher = ros_node.create_publisher(
+        PoseArray,
+        "/openarm/eef_pose",
+        1,
+    )
+    gripper_publisher = ros_node.create_publisher(
+        JointState,
+        "/openarm/gripper_cmd",
+        1,
+    )
 
     dora_node = DoraNode()
 
     latest_left: Optional[list[float]] = None
     latest_right: Optional[list[float]] = None
 
+    latest_pose_right: Optional[list[float]] = None
+    latest_pose_left: Optional[list[float]] = None
+    latest_pose_reference: Optional[list[float]] = None
+
     left_updated = False
     right_updated = False
     first_publish = True
 
     ros_node.get_logger().info(
-        "Dora → ROS 2 bridge started: /openarm/vr_joint_command"
+        "Dora → ROS 2 bridge started: /openarm/vr_joint_command, "
+        "/openarm/eef_pose (order: right, left, reference), "
+        "/openarm/gripper_cmd"
     )
 
     try:
@@ -88,6 +119,36 @@ def main() -> None:
                 latest_right = values
                 right_updated = True
 
+            elif input_id in ("pose_right", "pose_left", "pose_reference"):
+                if len(values) != 7:
+                    ros_node.get_logger().warning(
+                        f"{input_id} 應為 7 維 (xyz + quat)，目前收到 {len(values)} 維"
+                    )
+                    continue
+
+                if input_id == "pose_right":
+                    latest_pose_right = values
+                elif input_id == "pose_left":
+                    latest_pose_left = values
+                else:
+                    latest_pose_reference = values
+
+                pose_array_msg = PoseArray()
+                pose_array_msg.header.stamp = ros_node.get_clock().now().to_msg()
+                # 固定順序：right, left, reference。尚未收到的一側先以原點姿態填補。
+                pose_array_msg.poses = [
+                    pose_values_to_msg(latest_pose_right or IDENTITY_POSE),
+                    pose_values_to_msg(latest_pose_left or IDENTITY_POSE),
+                    pose_values_to_msg(latest_pose_reference or IDENTITY_POSE),
+                ]
+
+                eef_pose_publisher.publish(pose_array_msg)
+                rclpy.spin_once(ros_node, timeout_sec=0.0)
+                continue
+
+            else:
+                continue
+
             # 等左右兩側都收到一筆新資料後再發布
             if (
                 latest_left is None
@@ -106,6 +167,14 @@ def main() -> None:
             msg.position = latest_left[:7] + latest_right[:7]
 
             publisher.publish(msg)
+            rclpy.spin_once(ros_node, timeout_sec=0.0)
+
+            gripper_msg = JointState()
+            gripper_msg.header.stamp = msg.header.stamp
+            gripper_msg.name = ["gripper_left", "gripper_right"]
+            gripper_msg.position = [latest_left[7], latest_right[7]]
+
+            gripper_publisher.publish(gripper_msg)
             rclpy.spin_once(ros_node, timeout_sec=0.0)
 
             left_updated = False

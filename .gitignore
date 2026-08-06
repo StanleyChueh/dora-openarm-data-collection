@@ -14,3 +14,6 @@
 
 /dataset/
 /out/
+/.venv-ros2/
+/.venv-dora/
+/.venv/

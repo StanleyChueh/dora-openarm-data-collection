@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV /home/csl/Ivan_ws/dora-openarm-data-collection/.venv-ros2
+set -gx VIRTUAL_ENV /home/csl/Stanley_ws/dora-openarm-data-collection/.venv-ros2
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH

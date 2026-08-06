@@ -1,4 +1,4 @@
-#!/home/csl/Ivan_ws/dora-openarm-data-collection/.venv-ros2/bin/python
+#!/home/csl/Stanley_ws/dora-openarm-data-collection/.venv-ros2/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

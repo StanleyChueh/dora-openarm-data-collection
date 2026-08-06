@@ -41,18 +41,34 @@ nodes:
   - id: udp-receiver
     build: pip install -e nodes/dora-openarm-vr
     path: dora-openarm-quest-receiver
-    args: "--host 0.0.0.0 --port 5006"
+    args: >-
+      --host 0.0.0.0
+      --port 5006
+      --visualize
+      --view-reference-mode relationship
+      --view-span 1.5
+      --view-axis-length 0.12
+      --view-fps 30
+      --view-trail 60
     inputs:
       tick: quittable-tick-leader/tick
     outputs:
       - pose_right
-      - trigger_right
       - pose_left
+      - pose_reference
+      - trigger_right
       - trigger_left
-      - joystick_y
+      - grip_right
+      - grip_left
+      - joystick_x_left
+      - joystick_y_left
+      - joystick_x_right
+      - joystick_y_right
       - button_a
       - button_b
       - button_x
+      - button_y
+      - vr_recv_ts
       - status
 
   - id: ik
@@ -72,9 +88,14 @@ nodes:
 
   - id: ros2-bridge
     path: ./nodes/dora-openarm-ros2-bridge/run_bridge.sh
+    env:
+      ROS_DOMAIN_ID: "1"
     inputs:
       position_left: ik/position_left
       position_right: ik/position_right
+      pose_right: udp-receiver/pose_right
+      pose_left: udp-receiver/pose_left
+      pose_reference: udp-receiver/pose_reference
 
   # ── MuJoCo viewer (replaces follower-right, follower-left, and all cameras) ──
   - id: mujoco-collect
@@ -86,7 +107,7 @@ nodes:
       position_right: ik/position_right
       pose_right: udp-receiver/pose_right
       pose_left: udp-receiver/pose_left
-      joystick_y: udp-receiver/joystick_y
+      joystick_y: udp-receiver/joystick_y_right
       button_x: udp-receiver/button_x
     outputs:
       - status

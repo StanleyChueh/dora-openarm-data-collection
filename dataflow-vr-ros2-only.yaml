@@ -49,6 +49,7 @@ nodes:
       - trigger_right
       - pose_left
       - trigger_left
+      - pose_reference
       - joystick_y
       - button_a
       - button_b
@@ -71,8 +72,11 @@ nodes:
       - status
 
   - id: ros2-bridge
-    path: /home/csl/Ivan_ws/dora-openarm-data-collection/.venv_ros2/bin/python3
-    args: "-u /home/csl/Ivan_ws/dora-openarm-data-collection/nodes/dora-openarm-ros2-bridge/bridge.py"
+    path: /home/csl/Stanley_ws/dora-openarm-data-collection/.venv-ros2/bin/python3
+    args: "-u /home/csl/Stanley_ws/dora-openarm-data-collection/nodes/dora-openarm-ros2-bridge/bridge.py"
     inputs:
       position_left: ik/position_left
       position_right: ik/position_right
+      pose_right: udp-receiver/pose_right
+      pose_left: udp-receiver/pose_left
+      pose_reference: udp-receiver/pose_reference
