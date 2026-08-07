@@ -98,6 +98,19 @@ nodes:
       pose_left: udp-receiver/pose_left
       pose_reference: udp-receiver/pose_reference
 
+  # Subscribes to ros2-bridge's own /openarm/vr_joint_command + /openarm/gripper_cmd ROS 2
+  # topics directly (not via dora's dataflow IPC -- it has no dora-graph dependency on
+  # ros2-bridge, just a ROS-topic one) and republishes /openarm/vr_joint_command_processed
+  # with joint6/joint7 swapped+negated per arm and the gripper commands appended. The
+  # `tick` input exists only so dora schedules/tracks this as a node in the graph; the
+  # script itself never reads it -- all of its actual work is driven by ROS 2 callbacks.
+  - id: joint-command-processor
+    path: ./nodes/dora-openarm-ros2-bridge/run_processor.sh
+    env:
+      ROS_DOMAIN_ID: "1"
+    inputs:
+      tick: quittable-tick-leader/tick
+
   # ── MuJoCo viewer (replaces follower-right, follower-left, and all cameras) ──
   - id: mujoco-collect
     build: pip install -e nodes/dora-openarm-mujoco

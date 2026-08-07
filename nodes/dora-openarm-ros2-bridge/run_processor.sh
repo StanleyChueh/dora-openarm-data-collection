@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+source /opt/ros/humble/setup.bash
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+exec "$REPO_ROOT/.venv-ros2/bin/python" \
+  -u "$SCRIPT_DIR/joint_command_processor.py" "$@"
