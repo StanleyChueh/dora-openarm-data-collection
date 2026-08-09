@@ -38,7 +38,19 @@ same tick (udp-receiver, ik) -- an early version of this script called plain
 `rclpy.spin()` and never touched the dora API, which froze the whole dataflow after the
 queue filled. Needs the same ROS 2 Humble / Python 3.10 environment as bridge.py (see
 run_processor.sh), because rclpy's C extension only ships for that ABI.
+
+If --vr-joint-udp-port is set, also fire-and-forget UDP-broadcasts the same processed
+name/position arrays as JSON -- mirrors bridge.py's VrUdpBroadcaster, for the same
+reason: Isaac Lab's conda env is Python 3.11, but rclpy is only built for the system's
+Python 3.10, so record_demos_openarm.py's joint-space teleop device can't subscribe to
+this node's ROS 2 topic directly and needs this side-channel instead.
 """
+
+import argparse
+import json
+import socket
+import time
+from typing import Optional
 
 import rclpy
 from dora import Node as DoraNode
@@ -60,10 +72,52 @@ LEFT_GRIPPER_JOINT_NAME = "openarm_left_finger_joint1"
 RIGHT_GRIPPER_JOINT_NAME = "openarm_right_finger_joint1"
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Post-process /openarm/vr_joint_command.")
+    parser.add_argument(
+        "--vr-joint-udp-host",
+        type=str,
+        default="127.0.0.1",
+        help="Destination host for the optional joint-command UDP JSON side-channel.",
+    )
+    parser.add_argument(
+        "--vr-joint-udp-port",
+        type=int,
+        default=0,
+        help=(
+            "If nonzero, best-effort UDP-broadcast the processed name/position arrays as"
+            " JSON to <vr-joint-udp-host>:<vr-joint-udp-port> on every update. Off by"
+            " default. Intended for an Isaac Lab joint-space teleop device that cannot"
+            " import rclpy directly (Python ABI mismatch)."
+        ),
+    )
+    return parser.parse_args()
+
+
+class VrJointUdpBroadcaster:
+    """Best-effort UDP JSON broadcaster of the processed joint command.
+
+    Fire-and-forget, mirrors bridge.py's VrUdpBroadcaster: never blocks and never
+    raises into the ROS 2 callback that calls it.
+    """
+
+    def __init__(self, host: str, port: int):
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._addr = (host, port)
+
+    def broadcast(self, name: list[str], position: list[float]) -> None:
+        packet = {"t": time.time(), "name": name, "position": position}
+        try:
+            self._sock.sendto(json.dumps(packet).encode("utf-8"), self._addr)
+        except OSError:
+            pass  # best-effort only -- never let a networking hiccup break the node
+
+
 class JointCommandProcessor(Node):
-    def __init__(self):
+    def __init__(self, vr_joint_udp: Optional[VrJointUdpBroadcaster] = None):
         super().__init__("openarm_vr_joint_command_processor")
 
+        self._vr_joint_udp = vr_joint_udp
         self._latest_gripper_left: float | None = None
         self._latest_gripper_right: float | None = None
 
@@ -79,6 +133,7 @@ class JointCommandProcessor(Node):
             "Publishing /openarm/vr_joint_command_processed (joint6/joint7 swapped+negated"
             f" per arm; order [left_joint1..7, {LEFT_GRIPPER_JOINT_NAME}, right_joint1..7,"
             f" {RIGHT_GRIPPER_JOINT_NAME}])"
+            + (f", VR joint UDP JSON -> {vr_joint_udp._addr}" if vr_joint_udp is not None else "")
         )
 
     def _on_gripper(self, msg: JointState) -> None:
@@ -125,10 +180,20 @@ class JointCommandProcessor(Node):
         out.position = out_positions
         self._pub.publish(out)
 
+        if self._vr_joint_udp is not None:
+            self._vr_joint_udp.broadcast(out_names, out_positions)
+
 
 def main() -> None:
+    args = parse_args()
+    vr_joint_udp = (
+        VrJointUdpBroadcaster(args.vr_joint_udp_host, args.vr_joint_udp_port)
+        if args.vr_joint_udp_port
+        else None
+    )
+
     rclpy.init()
-    ros_node = JointCommandProcessor()
+    ros_node = JointCommandProcessor(vr_joint_udp=vr_joint_udp)
     dora_node = DoraNode()
 
     try:

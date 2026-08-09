@@ -106,6 +106,7 @@ nodes:
   # script itself never reads it -- all of its actual work is driven by ROS 2 callbacks.
   - id: joint-command-processor
     path: ./nodes/dora-openarm-ros2-bridge/run_processor.sh
+    args: "--vr-joint-udp-host 127.0.0.1 --vr-joint-udp-port 5801"
     env:
       ROS_DOMAIN_ID: "1"
     inputs:
