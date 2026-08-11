@@ -111,6 +111,8 @@ nodes:
       ROS_DOMAIN_ID: "1"
     inputs:
       tick: quittable-tick-leader/tick
+      button_x: udp-receiver/button_x
+      button_y: udp-receiver/button_y
 
   # ── MuJoCo viewer (replaces follower-right, follower-left, and all cameras) ──
   - id: mujoco-collect

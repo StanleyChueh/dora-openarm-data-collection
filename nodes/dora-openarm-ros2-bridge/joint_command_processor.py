@@ -51,6 +51,15 @@ name/position arrays as JSON -- mirrors bridge.py's VrUdpBroadcaster, for the sa
 reason: Isaac Lab's conda env is Python 3.11, but rclpy is only built for the system's
 Python 3.10, so record_demos_openarm.py's joint-space teleop device can't subscribe to
 this node's ROS 2 topic directly and needs this side-channel instead.
+
+Also takes `button_x`/`button_y` as dora inputs (sourced from udp-receiver/button_x and
+udp-receiver/button_y -- the Quest controller's X/Y buttons, see quest_receiver.py)
+and piggybacks their latest boolean state onto every UDP broadcast. These arrive over
+dora's dataflow IPC, not ROS 2, so they're handled directly in main()'s event loop
+rather than through a subscription. record_demos_openarm.py's VRDualArmJointTeleop
+watches for a rising edge on each and triggers the same save/discard actions as the
+N/R keyboard shortcuts (X -> save episode as success, Y -> discard & reset) -- this
+node only relays the raw booleans, it has no opinion on what they mean.
 """
 
 import argparse
@@ -59,6 +68,7 @@ import socket
 import time
 from typing import Optional
 
+import numpy as np
 import rclpy
 from dora import Node as DoraNode
 from rclpy.node import Node
@@ -73,6 +83,21 @@ EXPECTED_LEN = 14
 # Controller can resolve them against the actual USD articulation.
 LEFT_GRIPPER_JOINT_NAME = "openarm_left_finger_joint1"
 RIGHT_GRIPPER_JOINT_NAME = "openarm_right_finger_joint1"
+
+# Synthetic "joint" names used only to piggyback the Quest X/Y button state onto the
+# published /openarm/vr_joint_command_processed JointState (position 1.0 = pressed,
+# 0.0 = released) -- see _on_joint_command. This is for the --teleop_device
+# vr_joint_ros2_native consumer only (record_demos_openarm.py's ROS2NativeJointTeleop),
+# which decodes the topic via a ROS2SubscribeJointState OmniGraph node and has no other
+# channel to receive button state on (no UDP JSON hop in that mode). The vr_joint_ros2
+# (UDP) consumer already gets button_x/button_y as explicit top-level JSON fields from
+# VrJointUdpBroadcaster.broadcast() and does not need these -- they are deliberately
+# NOT added to the UDP broadcast's name/position arrays, only to the ROS2-published
+# message. ROS2JointCommandAction's action terms only look up their OWN joint_names in
+# this map (see its apply_actions()), so these two extra entries are silently ignored
+# by the actual arm/gripper control path -- they never reach set_joint_position_target.
+BUTTON_X_JOINT_NAME = "button_x"
+BUTTON_Y_JOINT_NAME = "button_y"
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,8 +133,16 @@ class VrJointUdpBroadcaster:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._addr = (host, port)
 
-    def broadcast(self, name: list[str], position: list[float]) -> None:
-        packet = {"t": time.time(), "name": name, "position": position}
+    def broadcast(
+        self, name: list[str], position: list[float], button_x: bool = False, button_y: bool = False
+    ) -> None:
+        packet = {
+            "t": time.time(),
+            "name": name,
+            "position": position,
+            "button_x": button_x,
+            "button_y": button_y,
+        }
         try:
             self._sock.sendto(json.dumps(packet).encode("utf-8"), self._addr)
         except OSError:
@@ -123,6 +156,14 @@ class JointCommandProcessor(Node):
         self._vr_joint_udp = vr_joint_udp
         self._latest_gripper_left: float | None = None
         self._latest_gripper_right: float | None = None
+        # Latest Quest X/Y button state, set from the dora event loop in main() (not a
+        # ROS 2 subscription -- these arrive over dora's dataflow IPC from udp-receiver,
+        # not over ROS 2) and piggybacked onto the next processed-joint-command UDP
+        # broadcast below. Record/discard semantics are decided entirely on the
+        # IsaacLab side (record_demos_openarm.py's VRDualArmJointTeleop) -- this node
+        # just relays the raw booleans.
+        self.button_x: bool = False
+        self.button_y: bool = False
 
         self._gripper_sub = self.create_subscription(
             JointState, "/openarm/gripper_cmd", self._on_gripper, 1
@@ -174,12 +215,14 @@ class JointCommandProcessor(Node):
 
         out = JointState()
         out.header.stamp = msg.header.stamp
-        out.name = out_names
-        out.position = out_positions
+        out.name = out_names + [BUTTON_X_JOINT_NAME, BUTTON_Y_JOINT_NAME]
+        out.position = out_positions + [1.0 if self.button_x else 0.0, 1.0 if self.button_y else 0.0]
         self._pub.publish(out)
 
         if self._vr_joint_udp is not None:
-            self._vr_joint_udp.broadcast(out_names, out_positions)
+            self._vr_joint_udp.broadcast(
+                out_names, out_positions, button_x=self.button_x, button_y=self.button_y
+            )
 
 
 def main() -> None:
@@ -199,6 +242,12 @@ def main() -> None:
             if event["type"] == "STOP":
                 break
             if event["type"] != "INPUT":
+                continue
+            if event["id"] == "button_x":
+                ros_node.button_x = bool(np.asarray(event["value"]).reshape(-1)[0])
+                continue
+            if event["id"] == "button_y":
+                ros_node.button_y = bool(np.asarray(event["value"]).reshape(-1)[0])
                 continue
             # `tick` carries no data we need -- receiving it is what drains dora's
             # queue so upstream doesn't back up. The actual work runs in ROS 2
