@@ -40,8 +40,6 @@ Finger convention (differs from v2!): prismatic, qpos 0 = fully open,
 
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
 
-    <geom name="table_leg" type="box" pos="0.42 0 0.17" size="0.05 0.05 0.17" material="table_matte_black"/>
-
     <!-- static cameras (same names/optics as the v2 cell so the dataflow and
          recorder keep working unchanged) -->
     <camera name="camera_ceiling" pos="0.245 0 1.16" xyaxes="0 -1 0 1 0 0" fovy="66" resolution="960 600"/>
