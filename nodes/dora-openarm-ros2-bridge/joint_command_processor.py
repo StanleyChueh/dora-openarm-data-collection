@@ -5,8 +5,17 @@ Subscribes to the 14-joint JointState published by bridge.py on
 /openarm/vr_joint_command (order: openarm_left_joint1..7, openarm_right_joint1..7),
 and republishes a processed copy on /openarm/vr_joint_command_processed with:
 
-  - joint6/joint7 swapped per arm (joint6 <- old joint7, joint7 <- old joint6)
-  - both of those swapped values negated
+  - the arm joint values passed through unchanged. They used to be remapped here
+    (joint6/joint7 swapped and negated per arm) back when the ik node still solved
+    against the v2 model while Isaac Sim ran the custom v1_camera robot, whose wrist
+    composes the same two perpendicular axes in the opposite order. That remap was
+    never actually valid: reordering two non-commuting rotations cannot be undone by
+    permuting or negating their joint values, and measuring it across random arm
+    configurations showed 19-86 degrees of residual end-effector orientation error
+    (it happened to be exact only when joint6 alone moved, which is presumably how it
+    passed a first eyeball check). The ik node now solves against the v1_camera model
+    directly (--xml, see dataflow-vr-mujoco-ros2.yaml), so its output is already in
+    the convention Isaac's v1_camera USD expects and must NOT be remapped again.
   - the latest gripper_left/gripper_right (from /openarm/gripper_cmd) interleaved in,
     each right after its own arm's 7 joints, named as the robot's REAL gripper joint
     (openarm_left_finger_joint1 / openarm_right_finger_joint1 -- see
@@ -17,17 +26,15 @@ and republishes a processed copy on /openarm/vr_joint_command_processed with:
     -- 8 joints per arm -- matching record_demos_openarm.py's ActionsCfg field order
     (arm_action, gripper_action, right_arm_action, right_gripper_action).
 
-    CAVEAT: the gripper value forwarded here is /openarm/gripper_cmd's raw
-    trigger-mapped angle (0..0.785 rad, see record_demos_openarm.py's
-    VRDualArmTeleop.GRIPPER_RAW_RANGE) -- it is NOT yet rescaled to
-    openarm_left_finger_joint1's real prismatic travel (0..0.044 m, see
-    OpenArmKeyboard/JointMirrorBroadcaster's GRIPPER_OPEN_VAL/GRIPPER_CLOSED_VAL).
-    Isaac Lab's own BinaryJointPositionActionCfg path never hits this problem because
-    it only uses the sign of a further-derived +-1 command, not this raw angle,
-    directly. Feeding this raw value straight into an Articulation Controller's
-    Position Command will drive the finger joint's target far past its real limit
-    (clamped there by the joint's own limits, but not usefully proportional to trigger
-    squeeze) until this is rescaled -- e.g. finger_target_m = (raw_rad / 0.785) * 0.044.
+    Both gripper values are forwarded verbatim, and are already in the finger joint's
+    real prismatic travel (0 m closed .. 0.044 m open, matching
+    JointMirrorBroadcaster's GRIPPER_CLOSED_VAL/GRIPPER_OPEN_VAL) because the ik node
+    derives its trigger mapping from whichever model --xml loads. Two earlier
+    corrections for the v2 model's hinge gripper are therefore gone: the rad->m
+    rescale this docstring used to prescribe, and a negation of the right-hand value
+    (v2's right finger range is [-0.785, 0], so it needed flipping; v1_camera's is
+    [0, 0.044] on both sides, and negating it would drive the target below its lower
+    limit and jam that gripper shut).
 
 Runs as a dora node (like bridge.py) purely so dora schedules/manages its process and
 feeds it a `tick` input to drain -- the actual work happens over ROS 2 topics, not
@@ -57,12 +64,8 @@ from dora import Node as DoraNode
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
-# Indices within vr_joint_command's 14-entry name/position arrays -- see bridge.py's
-# LEFT_ARM_JOINT_NAMES + RIGHT_ARM_JOINT_NAMES order (7 left joints, then 7 right).
-LEFT_JOINT6_IDX = 5
-LEFT_JOINT7_IDX = 6
-RIGHT_JOINT6_IDX = 12
-RIGHT_JOINT7_IDX = 13
+# vr_joint_command carries 14 entries -- see bridge.py's LEFT_ARM_JOINT_NAMES +
+# RIGHT_ARM_JOINT_NAMES order (7 left joints, then 7 right).
 EXPECTED_LEN = 14
 
 # Real robot joint names (isaaclab_assets/robots/openarm.py) -- used instead of the
@@ -130,8 +133,8 @@ class JointCommandProcessor(Node):
         self._pub = self.create_publisher(JointState, "/openarm/vr_joint_command_processed", 1)
 
         self.get_logger().info(
-            "Publishing /openarm/vr_joint_command_processed (joint6/joint7 swapped+negated"
-            f" per arm; order [left_joint1..7, {LEFT_GRIPPER_JOINT_NAME}, right_joint1..7,"
+            "Publishing /openarm/vr_joint_command_processed (arm joints passed through;"
+            f" order [left_joint1..7, {LEFT_GRIPPER_JOINT_NAME}, right_joint1..7,"
             f" {RIGHT_GRIPPER_JOINT_NAME}])"
             + (f", VR joint UDP JSON -> {vr_joint_udp._addr}" if vr_joint_udp is not None else "")
         )
@@ -154,11 +157,6 @@ class JointCommandProcessor(Node):
         names = list(msg.name)
         positions = list(msg.position)
 
-        for j6_idx, j7_idx in ((LEFT_JOINT6_IDX, LEFT_JOINT7_IDX), (RIGHT_JOINT6_IDX, RIGHT_JOINT7_IDX)):
-            old_j6, old_j7 = positions[j6_idx], positions[j7_idx]
-            positions[j6_idx] = -old_j7
-            positions[j7_idx] = -old_j6
-
         # Interleave each gripper right after its own arm's 7 joints (arm_action,
         # gripper_action, right_arm_action, right_gripper_action order) instead of
         # appending both at the end. A side's gripper entry is omitted entirely if no
@@ -172,7 +170,7 @@ class JointCommandProcessor(Node):
         out_positions += positions[7:14]
         if self._latest_gripper_right is not None:
             out_names.append(RIGHT_GRIPPER_JOINT_NAME)
-            out_positions.append(-self._latest_gripper_right)
+            out_positions.append(self._latest_gripper_right)
 
         out = JointState()
         out.header.stamp = msg.header.stamp

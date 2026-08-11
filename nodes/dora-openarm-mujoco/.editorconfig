@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-/dataset/
-/out/
+root = true
 
+[*.sh]
 
-# Python build artifacts (several vendored node dirs ship no .gitignore of their own)
-__pycache__/
-*.py[cod]
-*.egg-info/
+indent_style = space
+indent_size = 2
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true

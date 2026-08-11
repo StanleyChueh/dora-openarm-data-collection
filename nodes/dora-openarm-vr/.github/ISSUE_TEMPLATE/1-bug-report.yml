@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-/dataset/
-/out/
-
-
-# Python build artifacts (several vendored node dirs ship no .gitignore of their own)
-__pycache__/
-*.py[cod]
-*.egg-info/
+name: Bug Report
+description: File a bug report.
+type: Bug
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the problem you got
+      description: It's better that you provide information as much as possible.
+    validations:
+      required: true

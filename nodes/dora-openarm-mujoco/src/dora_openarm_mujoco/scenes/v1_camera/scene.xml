@@ -1,0 +1,62 @@
+<!--
+v1_camera scene: custom OpenArm v1 with wrist-mounted cameras (converted from
+IsaacLab's v1_camera.urdf; see convert_from_urdf.py in this directory).
+
+Layout mirrors the bundled v2 "demo" scene proportions: the table top sits
+0.34 m below the arm mounts (arms mount at z=0.698 on this fixed-base torso),
+with an orange cube as the manipulation target. Provides the same five camera
+outputs the dataflow records: camera_wrist_left/right come from the robot
+model itself; camera_head_left/right and camera_ceiling are defined here.
+
+Finger convention (differs from v2!): prismatic, qpos 0 = fully open,
+0.044 m = closed. Keyframe "home" matches v2's arm posture (joint4 = pi/2).
+-->
+<mujoco model="openarm_v1_camera scene">
+  <compiler angle="radian"/>
+
+  <option timestep="0.001"/>
+
+  <statistic center="0.3 0 0.5" extent="1.6" meansize="0.05"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20" offwidth="1280" offheight="720"/>
+    <quality shadowsize="8192"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <material name="table_matte_offwhite" rgba="0.95 0.94 0.90 1" reflectance="0.05" shininess="0.1"/>
+    <material name="table_matte_black" rgba="0.247 0.247 0.247 1.0" reflectance="0.05" shininess="0.5"/>
+    <model name="openarm_v1" file="v1_camera_robot.xml"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <geom name="table_leg" type="box" pos="0.42 0 0.17" size="0.05 0.05 0.17" material="table_matte_black"/>
+
+    <!-- static cameras (same names/optics as the v2 cell so the dataflow and
+         recorder keep working unchanged) -->
+    <camera name="camera_ceiling" pos="0.245 0 1.16" xyaxes="0 -1 0 1 0 0" fovy="66" resolution="960 600"/>
+    <camera name="camera_head_left" pos="0.06 0.0315 0.81" xyaxes="0 -1 0 0.882948 0 0.469472" fovy="52" resolution="1280 720"/>
+    <camera name="camera_head_right" pos="0.06 -0.0315 0.81" xyaxes="0 -1 0 0.882948 0 0.469472" fovy="52" resolution="1280 720"/>
+
+    <attach model="openarm_v1" prefix=""/>
+  </worldbody>
+
+  <!-- 18 values = 9 per arm (joint1..7 + finger_joint1 + finger_joint2). Any body
+       with a freejoint added to the worldbody appends 7 more (xyz + wxyz quat) and
+       must be appended here too, or the model fails to compile on a size mismatch. -->
+  <keyframe>
+    <key name="home"
+      qpos="0.0 0.0 0.0 1.570796 0.0 0.0 0.0 0.0 0.0
+            0.0 0.0 0.0 1.570796 0.0 0.0 0.0 0.0 0.0"/>
+  </keyframe>
+</mujoco>

@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-/dataset/
-/out/
-
-
-# Python build artifacts (several vendored node dirs ship no .gitignore of their own)
-__pycache__/
-*.py[cod]
-*.egg-info/
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci: "
+    open-pull-requests-limit: 10

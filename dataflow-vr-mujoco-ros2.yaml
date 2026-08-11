@@ -74,7 +74,7 @@ nodes:
   - id: ik
     build: pip install -e nodes/dora-openarm-kinematics
     path: dora-openarm-ik
-    args: "--mode bimanual --max-iters 10 --dt 0.1 --damping 0.1 --posture-cost 0.01 --lm-damping 0.01"
+    args: "--mode bimanual --max-iters 10 --dt 0.1 --damping 0.1 --posture-cost 0.01 --lm-damping 0.01 --xml nodes/dora-openarm-mujoco/src/dora_openarm_mujoco/scenes/v1_camera/scene.xml"
     inputs:
       tick: quittable-tick-leader/tick
       target_right: udp-receiver/pose_right
@@ -116,7 +116,7 @@ nodes:
   - id: mujoco-collect
     build: pip install -e nodes/dora-openarm-mujoco
     path: dora-openarm-mujoco
-    args: "--scene demo --keyframe home --enable-collision --ctrl --viewer --render"
+    args: "--scene v1_camera --keyframe home --enable-collision --ctrl --viewer --render"
     inputs:
       position_left: ik/position_left
       position_right: ik/position_right

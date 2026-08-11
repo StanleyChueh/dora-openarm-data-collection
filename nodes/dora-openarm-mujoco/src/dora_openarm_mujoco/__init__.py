@@ -12,11 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-/dataset/
-/out/
+from dora_openarm_mujoco.main import cli_main, main
 
-
-# Python build artifacts (several vendored node dirs ship no .gitignore of their own)
-__pycache__/
-*.py[cod]
-*.egg-info/
+__all__ = ["cli_main", "main"]

@@ -11,12 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-/dataset/
-/out/
-
-
-# Python build artifacts (several vendored node dirs ship no .gitignore of their own)
-__pycache__/
-*.py[cod]
-*.egg-info/
