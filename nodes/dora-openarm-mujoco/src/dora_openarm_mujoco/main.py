@@ -47,11 +47,13 @@ pose_right / pose_left : float32[7]
     VR controller pose as [x, y, z, qw, qx, qy, qz].  Only used for the
     ``--debug-frames`` overlay; ignored otherwise.
 
-button_x : bool[1]
-    X button state from the VR controller.  On press every scene joint
+button_x / button_y : bool[1]
+    X / Y button state from the VR controller.  On press every scene joint
     (anything other than the arms) is snapped back to the ``--keyframe``
     pose (default: ``home``): freejoint objects as well as articulated
-    fixtures such as drawers and doors.
+    fixtures such as drawers and doors.  With ``--reset-arms-on-button`` both
+    arms are snapped back too (qpos, qvel and, in ``--ctrl`` mode, the actuator
+    targets).
     The trigger is edge-detected: the button must be released before the
     next reset can fire.
 
@@ -103,6 +105,15 @@ CLI arguments (set via ``args:`` in the dataflow YAML)
 --debug-frames
     Draw the VR controller coordinate frames as coloured arrows in the viewer.
     Only visible when ``--viewer`` is also set.
+
+--reset-arms-on-button
+    Also snap both arms back to ``--keyframe`` when button_x/button_y is
+    pressed, instead of only the scene objects.  Off by default because it is
+    only safe when whatever drives ``position_left``/``position_right`` resets
+    on the same button edge -- otherwise the next incoming command drags the
+    arms straight back.  The ik node does exactly that when its own button_x /
+    button_y inputs are wired (see dora_openarm_ik.ik), which is the setup
+    dataflow-vr-mujoco-ros2.yaml uses.
 """
 
 import argparse
@@ -321,6 +332,50 @@ def _find_scene_joint_addrs(model: mujoco.MjModel) -> list[tuple[slice, slice, s
     return addrs
 
 
+def _find_arm_dof_addrs(model: mujoco.MjModel) -> list[int]:
+    """DOF addresses of both arms' joints (7 arm + 2 finger joints per side)."""
+    names = [f"joint{i}" for i in range(1, 8)] + ["finger_joint1", "finger_joint2"]
+    addrs: list[int] = []
+    for side in ("right", "left"):
+        for suffix in names:
+            jnt_id = mujoco.mj_name2id(
+                model, mujoco.mjtObj.mjOBJ_JOINT, f"openarm_{side}_{suffix}"
+            )
+            if jnt_id >= 0:
+                addrs.append(int(model.jnt_dofadr[jnt_id]))
+    return addrs
+
+
+def _reset_arms(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    mapper: JointResolver,
+    key_id: int,
+    arm_dof_addrs: list[int],
+) -> bool:
+    """Snap both arms back to the keyframe posture, at rest.
+
+    Writes ``data.ctrl`` as well as ``data.qpos``: in ``--ctrl`` mode the
+    actuators would otherwise immediately pull the arms back to the pre-reset
+    command.  The ik node performs the matching reset of its own solver
+    configuration on the same button edge, so the next command it publishes is
+    the keyframe posture too.
+    """
+    if key_id < 0:
+        return False
+    key_qpos = model.key_qpos[key_id]
+    for side in ("right", "left"):
+        joints, finger = mapper.get_driver(key_qpos, side)
+        driver = np.append(np.asarray(joints, dtype=np.float64), float(finger))
+        mapper.set_qpos(data.qpos, driver, side)
+        mapper.set_ctrl(data.ctrl, driver, side)
+    for dof in arm_dof_addrs:
+        data.qvel[dof] = 0.0
+        data.qacc[dof] = 0.0
+    mujoco.mj_forward(model, data)
+    return True
+
+
 def _reset_scene_objects(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -459,12 +514,28 @@ def _run_dora(
     object_addrs: list[tuple[slice, slice, str]],
     use_ctrl: bool = False,
     debug_frames: bool = False,
+    reset_arms: bool = False,
     compare_bridge: "IsaacCompareBridge | None" = None,
 ) -> None:
     print("[dora] Event loop started.")
     pose_right: np.ndarray | None = None
     pose_left: np.ndarray | None = None
-    button_x_prev = False
+    button_prev = {"button_x": False, "button_y": False}
+    arm_dof_addrs = _find_arm_dof_addrs(model)
+    object_names = ", ".join(name for _, _, name in object_addrs) or "(none)"
+
+    def _reset(source: str) -> None:
+        with _lock(viewer, data_lock):
+            _reset_scene_objects(model, data, reset_key_id, object_addrs)
+            done = (
+                _reset_arms(model, data, mapper, reset_key_id, arm_dof_addrs)
+                if reset_arms
+                else False
+            )
+        parts = [f"objects: {object_names}"]
+        if reset_arms:
+            parts.append("arms → keyframe" if done else "arms: no keyframe, skipped")
+        print(f"[reset] {source} pressed → {'; '.join(parts)}", flush=True)
 
     try:
         for event in node:
@@ -499,14 +570,12 @@ def _run_dora(
                 pose_right = np.array(event["value"], dtype=np.float32)
             elif eid == "pose_left":
                 pose_left = np.array(event["value"], dtype=np.float32)
-            elif eid == "button_x":
+            elif eid in button_prev:
                 pressed = bool(np.asarray(event["value"]).reshape(-1)[0])
-                if pressed and not button_x_prev:
-                    with _lock(viewer, data_lock):
-                        _reset_scene_objects(model, data, reset_key_id, object_addrs)
-                    names = ", ".join(name for _, _, name in object_addrs) or "(none)"
-                    print(f"[reset] button_x pressed → reset objects: {names}")
-                button_x_prev = pressed
+                rising = pressed and not button_prev[eid]
+                button_prev[eid] = pressed
+                if rising:
+                    _reset(eid)
 
             if viewer is not None and debug_frames:
                 with viewer.lock():
@@ -672,6 +741,16 @@ def _parse_args() -> argparse.Namespace:
         help="Draw VR controller coordinate frames as overlays in the viewer (default: off)",
     )
     p.add_argument(
+        "--reset-arms-on-button",
+        action="store_true",
+        help=(
+            "On button_x/button_y also snap both arms back to --keyframe, not just the"
+            " scene objects. Only safe when the node driving position_left/right resets"
+            " on the same button edge (the ik node does, once its button inputs are"
+            " wired) -- otherwise the next command drags the arms straight back."
+        ),
+    )
+    p.add_argument(
         "--isaac-feedback-host",
         default="127.0.0.1",
         help=(
@@ -761,6 +840,7 @@ def main() -> None:
                     object_addrs,
                     args.ctrl,
                     args.debug_frames,
+                    args.reset_arms_on_button,
                     compare_bridge,
                 ),
                 daemon=True,
@@ -794,6 +874,7 @@ def main() -> None:
                 object_addrs,
                 args.ctrl,
                 args.debug_frames,
+                args.reset_arms_on_button,
                 compare_bridge,
             ),
             daemon=True,

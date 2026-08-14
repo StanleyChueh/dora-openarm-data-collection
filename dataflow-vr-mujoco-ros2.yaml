@@ -74,13 +74,20 @@ nodes:
   - id: ik
     build: pip install -e nodes/dora-openarm-kinematics
     path: dora-openarm-ik
-    args: "--mode bimanual --max-iters 10 --dt 0.1 --damping 0.1 --posture-cost 0.01 --lm-damping 0.01 --xml nodes/dora-openarm-mujoco/src/dora_openarm_mujoco/scenes/v1_camera/scene.xml"
+    args: "--mode bimanual --max-iters 10 --dt 0.1 --damping 0.1 --posture-cost 0.01 --lm-damping 0.01 --hold-until-anchor --xml nodes/dora-openarm-mujoco/src/dora_openarm_mujoco/scenes/v1_camera/scene.xml"
     inputs:
       tick: quittable-tick-leader/tick
       target_right: udp-receiver/pose_right
       target_left: udp-receiver/pose_left
       trigger_right: udp-receiver/trigger_right
       trigger_left: udp-receiver/trigger_left
+      # --hold-until-anchor above parks the arms at the 'home' keyframe on
+      # startup. X (1st press) anchors the operator's current controller pose
+      # onto that keyframe pose and goes live; X (2nd press) resets to the
+      # keyframe and holds it, and zeroes the press counter; Y does the same as
+      # that 2nd press at any time. See dora_openarm_ik.ik's module docstring.
+      button_x: udp-receiver/button_x
+      button_y: udp-receiver/button_y
     outputs:
       - position_left
       - position_right
@@ -118,7 +125,7 @@ nodes:
   - id: mujoco-collect
     build: pip install -e nodes/dora-openarm-mujoco
     path: dora-openarm-mujoco
-    args: "--scene v1_camera --keyframe home --enable-collision --ctrl --viewer --render"
+    args: "--scene v1_camera --keyframe home --enable-collision --ctrl --viewer --render --reset-arms-on-button"
     inputs:
       position_left: ik/position_left
       position_right: ik/position_right
@@ -126,6 +133,7 @@ nodes:
       pose_left: udp-receiver/pose_left
       joystick_y: udp-receiver/joystick_y_right
       button_x: udp-receiver/button_x
+      button_y: udp-receiver/button_y
     outputs:
       - status
       - arm_right_observation
@@ -135,6 +143,17 @@ nodes:
       - camera_head_left
       - camera_head_right
       - camera_ceiling
+  # Unrelated scratch note, kept as a comment -- as bare text it was parsed as
+  # part of this document and made `dora run dataflow-vr-mujoco-ros2.yaml` fail
+  # with a YAML scanner error before any node started:
+  #
+  # env -u PYTHONPATH -u LD_LIBRARY_PATH ~/miniforge3/envs/lerobot-openarm-cf/bin/python \
+  #   replay_hf_sim_episode_realgrip.py \
+  #   --repo-id ethanCSL/openarm_visuomotor_VR_pringles_V6 --episode 1 \
+  #   --calibration calibration.json --model-path /home/csl/Stanley_ws/IsaacLab/source/isaaclab_assets/data/v1_camera_isaac/urdf/v1_camera.urdf \
+  #   --grip-continuous --grip-input-closed 0.029 --grip-close-frac 1.0 \
+  #   --handshake-tolerance 1.0 --ramp-duration 3.0 --max-joint-speed 1.8 \
+  #   --max-steps 3000 --plot sim_vs_real_realgrip_continuous.png --playback-hz 7.5
 
   - id: recorder
     build: pip install -e nodes/dora-openarm-dataset-recorder
