@@ -198,6 +198,14 @@ def _run(args: argparse.Namespace) -> None:
     hold: dict[str, np.ndarray | None] = {
         "command": home_driver.copy() if args.hold_until_anchor else None
     }
+    
+    smooth_reset = {
+        "active": False,
+        "start_time": 0.0,
+        "start_cmd": None,
+        "target_cmd": home_driver.copy(),
+        "duration": 1.0  # 平滑移動的總時間 (秒)，實測後若覺得太快/太慢可改這裡
+    }
     if args.hold_until_anchor:
         print(
             f"[ik] holding keyframe '{args.keyframe}' – press button_x to anchor "
@@ -263,6 +271,7 @@ def _run(args: argparse.Namespace) -> None:
             flush=True,
         )
         return command
+    
 
     def _release_hold(source: str) -> None:
         was_held = hold["command"] is not None
